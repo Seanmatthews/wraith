@@ -98,16 +98,43 @@ class Wraith:
             return
 
 
+    def _redraw_main(self, win):
+        win.addstr(self.readbuf)
+        win.refresh()
+
+        
+    def _redraw_cmdline(self, win):
+        h, w = win.getmaxyx()
+        win.clear()
+        win.border()
+        win.addstr(1, 2, self.msg)
+        win.refresh()
+
+        
+    def _redraw_sidebar(self, win):
+        win.refresh()
+
+
     @asyncio.coroutine
     def _update_windows(self, scr):
 
         # Create windows
-#        win_cmdline = scr.derwin(1, 88, 25, 0)
-        win_main = scr.derwin(10, 50, 10, 0)
+        sidebar_width = 15
+        chatline_yx = (curses.LINES - 3, 0)
+        sidebar_hwyx = (curses.LINES - 3, sidebar_width - 1, 0, 0)
+        main_hwyx = (curses.LINES - 5, curses.COLS - sidebar_width - 1,
+                     2, sidebar_width + 1)
+
+        win_sidebar = scr.derwin(*sidebar_hwyx)
+        win_cmdline = scr.derwin(*chatline_yx)
+        win_main = scr.derwin(*main_hwyx)
 
         # Window properties
+        #m_h, m_w = win_main.getmaxyx()
         win_main.scrollok(True)
         win_main.idlok(True)
+#        win_main.vline(curses.LINES-2, curses.COLS-sidebar_width,
+#                       ACS_VLINE, curses.LINES-2)
         
         try:
             loop = asyncio.get_event_loop()
@@ -118,21 +145,20 @@ class Wraith:
                 # Check for resize
                 
                 # Handle user input
-                #                scr.clear()
-                #                scr.addstr(self.msg)
-                #                scr.refresh()
-                #                win_cmdline.clear()
-                #                win_cmdline.addstr(self.msg)
+                self._redraw_cmdline(win_cmdline)
                 
                 # Handle game text
-                win_main.addstr(self.readbuf)
+                self._redraw_main(win_main)
                 self.readbuf = ''
 
-                # Refresh all
+                # Update sidebar
+                self._redraw_sidebar(win_sidebar)
+
+                # Refresh stdscr
+                s_h, s_w = win_sidebar.getmaxyx()
+                scr.vline(2, sidebar_width, curses.ACS_VLINE, curses.LINES - 5)
+                scr.move(chatline_yx[0] + 1, chatline_yx[1] + len(self.msg) + 2)
                 scr.refresh()
-#                win_cmdline.refresh()
-                win_main.refresh()
-#                scr.move(0, 0)
             
         except KeyboardInterrupt:
             return
