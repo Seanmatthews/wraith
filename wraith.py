@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+from bs4 import BeautifulSoup
+from gs3parser import GS3Parser
 from queue import Queue
 from threading import Thread
 
@@ -22,6 +24,7 @@ class Wraith:
         self.readbuf = ''
         self.cmds = Queue()
         self.logfile = open('log.txt', 'w')
+        self.parser = GS3Parser()
         
     @asyncio.coroutine
     def _user_input(self, scr):
@@ -88,10 +91,10 @@ class Wraith:
             raise
 
 
-    def _redraw_main(self, win):
-        self.logfile.write(self.readbuf)
-        for line in self.readbuf.splitlines():
-            win.addstr(line + '\n')
+    def _redraw_main(self, win, data):
+        self.logfile.write(data)
+        #for line in self.readbuf.splitlines():
+        win.addstr(data + '\n')
         win.noutrefresh()
 
         
@@ -124,7 +127,7 @@ class Wraith:
         # Window properties
         win_main.scrollok(True)
         win_main.idlok(True)
-        
+
         try:
             loop = asyncio.get_event_loop()
             while True:
@@ -132,16 +135,19 @@ class Wraith:
                 yield from asyncio.sleep(POLL_INTERVAL, loop=loop)
             
                 # Check for resize
-                
+
                 # Handle user input
                 self._redraw_cmdline(win_cmdline)
-                
-                # Handle game text
-                self._redraw_main(win_main)
-                self.readbuf = ''
 
-                # Update sidebar
-                self._redraw_sidebar(win_sidebar)
+                props = self.parse_lines()
+                
+                if len(props) > 0:
+                    # Handle game text
+                    #self._redraw_main(win_main, props[0]['text'])
+                    self._redraw_main(win_main, self.readbuf.splitlines()[0])
+
+                    # Update sidebar
+                    self._redraw_sidebar(win_sidebar)
 
                 # Refresh stdscr
                 s_h, s_w = win_sidebar.getmaxyx()
@@ -155,6 +161,16 @@ class Wraith:
         except KeyboardInterrupt:
             raise
 
+    def parse_lines(self):
+        props = []
+        for line in self.readbuf.splitlines():
+            soup = BeautifulSoup(line, 'html.parser')
+            if len(list(soup)) > 0:
+                props.append(1)
+            #props.append(self.parser.parse(line))
+            
+        self.readbuf = ''        
+        return props
         
     def main(self, scr):
         curses.start_color()

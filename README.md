@@ -1,4 +1,7 @@
-### dev notes
+## Running Instructions
+
+
+## dev notes
 
 2018-02-26
 * Cursor seems like it needs to be moved by the main screen, as a derwin could not move the cursor.

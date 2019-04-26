@@ -1,28 +1,24 @@
-from html.parser import HTMLParser
+#from html.parser import HTMLParser
+from bs4 import BeautifulSoup
 import curses
 
-class GS3Parser(HTMLParser):
+class GS3Parser:
 
-    def __init__(self, scr):
-        super(self).__init__(self) #???
-        self.scr = scr
-        self.tag = ''
-        self.attrs = []
-
+    def __init__(self):
         # this is load from file
-        curses.init_pair(curses.COLOR_WHITE, curses.COLOR_WHITE, curses.COLOR_BLACK)
-        self.style_color = {'roomDesc': curses.COLOR_WHITE}
-#        self.style_format = {'roomDesc': lambda d, a: d, 
-#                             'a': lambda d, a: d + ' ' + a}
+        #curses.init_pair(curses.COLOR_WHITE, curses.COLOR_WHITE, curses.COLOR_BLACK)
+        #self.style_color = {'roomDesc': curses.COLOR_WHITE}
+        pass
         
-    def handle_starttag(self, tag, attrs):
-        self.tag = tag
-        self.attrs = attrs
+    def parse(self, data):
+        ret = {}
+        soup = BeautifulSoup(data, 'html.parse')
+        for child in soup:
+            if "dialogdata" == child.name:
+                dialogdata(ret, child)
+            
+        return ret
 
-    def handle_endtag(self, tag):
-        self.tag = ''
-        self.attrs = []
 
-    def handle_data(self, data):
-        self.scr.addstr(data,
-                        curses.color_pair(self.style_color.get(self.tag, 0)))
+    def dialogdata(self, data, elem):
+        data['text'] = str(elem.attrs)
