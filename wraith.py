@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from bs4 import BeautifulSoup
+from collections import deque
 from gs3parser import GS3Parser
 from queue import Queue
 from threading import Thread
@@ -13,6 +13,7 @@ import string
 import sys
 import time
 
+import json
 
 POLL_INTERVAL = 0.01
 
@@ -20,14 +21,20 @@ class Wraith:
     
     def __init__(self):
 
+        self.cmdbuf = ''
         self.msg = ''
         self.readbuf = ''
-        self.cmds = Queue()
+        self.cmds = deque()
         self.logfile = open('log.txt', 'w')
-        self.parser = GS3Parser()
-        
+        self.parser = GS3Parser(self.logfile)
+        self.prevcmds = deque()
+        self.cmdidx = 0
+
     @asyncio.coroutine
     def _user_input(self, scr):
+        """
+        Monitors user keystrokes and performs actions accordingly.
+        """
         
         log = logging.getLogger('_user_input')
         log.info('starting')
@@ -44,17 +51,25 @@ class Wraith:
                 elif last == curses.KEY_BACKSPACE or last == 127:
                     self.msg = self.msg[:-1]
                 elif last == curses.KEY_UP:
+                    self.cmdidx -= 1
+                    if self.cmdidx < 0:
+                        self.cmdidx = 0
+                    self.msg = self.prevcmds[self.cmdidx]
                     pass
                 elif last == curses.KEY_DOWN:
-                    pass
+                    self.cmdidx += 1
+                    if self.cmdidx >= len(self.prevcmds):
+                        self.cmdidx = len(self.prevcmds) - 1
+                    self.msg = self.prevcmds[self.cmdidx]
                 elif last == curses.KEY_LEFT:
                     pass
                 elif last == curses.KEY_RIGHT:
                     pass
                 elif last == curses.KEY_ENTER or last == ord('\n'):
                     self.msg += '\n'
-                    self.cmds.put(self.msg)
+                    self.cmds.append(self.msg)
                     self.msg = ''
+                    self.cmdidx = 0
                 elif chr(last).isprintable():
                     self.msg += chr(last)
 
@@ -64,7 +79,12 @@ class Wraith:
     
     @asyncio.coroutine
     def _server_conn(self, scr):
+        """
+        The primary connection to the server. Writes incoming data to the read buffer.
+        Writes outgoing data to the write stream.
 
+        Note: This function works pretty well, but should eventually be profiled.
+        """
         try:
             loop = asyncio.get_event_loop()
             reader, writer = yield from asyncio.open_connection('localhost', 8000, loop=loop)
@@ -81,24 +101,38 @@ class Wraith:
                     pass
 
                 # Write outgoing & add to main window
-                if not self.cmds.empty():
-                    cmd = self.cmds.get(block=False)
+                if len(self.cmds) > 0:
+                    cmd = self.cmds.popleft()
                     writer.write(cmd.encode())
-                    self.readbuf += '> '
-                    self.readbuf += cmd + '\n'
+                    self.cmdbuf += '> '
+                    self.cmdbuf += cmd + '\n'
+                    self.prevcmds.appendleft(cmd)
 
         except KeyboardInterrupt:
             raise
 
 
-    def _redraw_main(self, win, data):
-        self.logfile.write(data)
-        #for line in self.readbuf.splitlines():
-        win.addstr(data + '\n')
+    def _redraw_main(self, win):
+        """
+        Redraw main window with supplied data
+        """
+        if self.cmdbuf:
+            win.addstr(self.cmdbuf)
+            self.cmdbuf = ''
+        if self.parser.text:
+            win.addstr(self.parser.text + '\n')
+        if (bool(self.parser.spells)):
+            win.addstr(json.dumps(self.parser.spells) + '\n')
+        if (bool(self.parser.stats)):
+            win.addstr(json.dumps(self.parser.stats) + '\n')
+        #win.addstr(self.parser.text)
         win.noutrefresh()
 
         
     def _redraw_cmdline(self, win):
+        """
+        Redraws the text entry bar as the user types
+        """
         h, w = win.getmaxyx()
         win.clear()
         win.border()
@@ -107,11 +141,17 @@ class Wraith:
 
         
     def _redraw_sidebar(self, win):
+        """
+        Redraws sidebar elements
+        """
         win.noutrefresh()
 
 
     @asyncio.coroutine
     def _update_windows(self, scr):
+        """
+        Triggers redrawing of all window elements
+        """
 
         # Create windows
         sidebar_width = 15
@@ -136,18 +176,20 @@ class Wraith:
             
                 # Check for resize
 
+                self.logfile.write(self.readbuf)
+                #self.parser.text = self.readbuf
+                
+                for line in self.readbuf.splitlines():
+                    self.parser.parse(line)
+                        
                 # Handle user input
                 self._redraw_cmdline(win_cmdline)
 
-                props = self.parse_lines()
+                # Update main window
+                self._redraw_main(win_main)
                 
-                if len(props) > 0:
-                    # Handle game text
-                    #self._redraw_main(win_main, props[0]['text'])
-                    self._redraw_main(win_main, self.readbuf.splitlines()[0])
-
-                    # Update sidebar
-                    self._redraw_sidebar(win_sidebar)
+                # Update sidebar
+                self._redraw_sidebar(win_sidebar)
 
                 # Refresh stdscr
                 s_h, s_w = win_sidebar.getmaxyx()
@@ -157,22 +199,18 @@ class Wraith:
 
                 # Do update for all noutrefreshed windows here for speed up
                 curses.doupdate()
+
+                self.parser.clear_vars()
+                self.readbuf = ''
             
         except KeyboardInterrupt:
             raise
 
-    def parse_lines(self):
-        props = []
-        for line in self.readbuf.splitlines():
-            soup = BeautifulSoup(line, 'html.parser')
-            if len(list(soup)) > 0:
-                props.append(1)
-            #props.append(self.parser.parse(line))
-            
-        self.readbuf = ''        
-        return props
         
     def main(self, scr):
+        """
+        Starts async loops for updating GUI, monitoring for user input, and managing server connection
+        """
         curses.start_color()
         scr.clear()
         scr.keypad(True)
