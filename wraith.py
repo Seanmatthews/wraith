@@ -9,6 +9,7 @@ import asyncio
 import concurrent.futures
 import curses, curses.panel
 import logging
+import signal
 import string
 import sys
 import time
@@ -50,13 +51,15 @@ class Wraith:
                     pass
                 elif last == curses.KEY_BACKSPACE or last == 127:
                     self.msg = self.msg[:-1]
-                elif last == curses.KEY_UP:
-                    self.cmdidx -= 1
-                    if self.cmdidx < 0:
-                        self.cmdidx = 0
-                    self.msg = self.prevcmds[self.cmdidx]
-                    pass
                 elif last == curses.KEY_DOWN:
+                    self.cmdidx -= 1
+                    if self.cmdidx < -1:
+                        self.cmdidx = -1
+                    if len(self.prevcmds) > 0 and self.cmdidx > -1:
+                        self.msg = self.prevcmds[self.cmdidx]
+                    else:
+                        self.msg = ''
+                elif last == curses.KEY_UP:
                     self.cmdidx += 1
                     if self.cmdidx >= len(self.prevcmds):
                         self.cmdidx = len(self.prevcmds) - 1
@@ -66,10 +69,9 @@ class Wraith:
                 elif last == curses.KEY_RIGHT:
                     pass
                 elif last == curses.KEY_ENTER or last == ord('\n'):
-                    self.msg += '\n'
                     self.cmds.append(self.msg)
                     self.msg = ''
-                    self.cmdidx = 0
+                    self.cmdidx = -1
                 elif chr(last).isprintable():
                     self.msg += chr(last)
 
@@ -102,7 +104,7 @@ class Wraith:
 
                 # Write outgoing & add to main window
                 if len(self.cmds) > 0:
-                    cmd = self.cmds.popleft()
+                    cmd = self.cmds.popleft() + '\n'
                     writer.write(cmd.encode())
                     self.cmdbuf += '> '
                     self.cmdbuf += cmd + '\n'
