@@ -31,8 +31,7 @@ class Wraith:
         self.prevcmds = deque()
         self.cmdidx = 0
 
-    @asyncio.coroutine
-    def _user_input(self, scr):
+    async def _user_input(self, scr):
         """
         Monitors user keystrokes and performs actions accordingly.
         """
@@ -45,7 +44,7 @@ class Wraith:
         
             while True:
                 
-                yield from asyncio.sleep(POLL_INTERVAL, loop=loop)
+                await asyncio.sleep(POLL_INTERVAL, loop=loop)
                 last = scr.getch()
                 if last < 0:
                     pass
@@ -79,8 +78,7 @@ class Wraith:
             raise
 
     
-    @asyncio.coroutine
-    def _server_conn(self, scr):
+    async def _server_conn(self, scr):
         """
         The primary connection to the server. Writes incoming data to the read buffer.
         Writes outgoing data to the write stream.
@@ -89,15 +87,15 @@ class Wraith:
         """
         try:
             loop = asyncio.get_event_loop()
-            reader, writer = yield from asyncio.open_connection('localhost', 8000, loop=loop)
+            reader, writer = await asyncio.open_connection('localhost', 8000, loop=loop)
             
             while True:
-                yield from asyncio.sleep(POLL_INTERVAL, loop=loop)
+                await asyncio.sleep(POLL_INTERVAL, loop=loop)
 
                 # Read incoming
                 try:
                     linegen = reader.readline()
-                    line = yield from asyncio.wait_for(linegen, timeout=POLL_INTERVAL)
+                    line = await asyncio.wait_for(linegen, timeout=POLL_INTERVAL)
                     self.readbuf += line.decode()
                 except asyncio.TimeoutError:
                     pass
@@ -149,8 +147,7 @@ class Wraith:
         win.noutrefresh()
 
 
-    @asyncio.coroutine
-    def _update_windows(self, scr):
+    async def _update_windows(self, scr):
         """
         Triggers redrawing of all window elements
         """
@@ -174,7 +171,7 @@ class Wraith:
             loop = asyncio.get_event_loop()
             while True:
 
-                yield from asyncio.sleep(POLL_INTERVAL, loop=loop)
+                await asyncio.sleep(POLL_INTERVAL, loop=loop)
             
                 # Check for resize
 
@@ -209,6 +206,14 @@ class Wraith:
             raise
 
         
+    async def handle_exception(self, coro, loop):
+        try:
+            await coro
+        except Exception:
+            self.logfile.write('Exception')
+            loop.stop()
+
+            
     def main(self, scr):
         """
         Starts async loops for updating GUI, monitoring for user input, and managing server connection
@@ -220,14 +225,18 @@ class Wraith:
 
         try:
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(asyncio.wait([
-                asyncio.async(self._update_windows(scr)),
-                asyncio.async(self._user_input(scr)),
-                asyncio.async(self._server_conn(scr))
-            ]))
-            loop.close()
+            update_windows_coro = self.handle_exception(self._update_windows(scr), loop)
+            user_input_coro = self.handle_exception(self._user_input(scr), loop)
+            server_conn_coro = self.handle_exception(self._server_conn(scr), loop)
+
+            loop.create_task(update_windows_coro)
+            loop.create_task(user_input_coro)
+            loop.create_task(server_conn_coro)
+            loop.run_forever()
         except Exception:
             self.logfile.close()
+        finally:
+            loop.stop()
             
 
 if __name__ == '__main__':
