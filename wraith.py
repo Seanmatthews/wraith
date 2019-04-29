@@ -7,6 +7,7 @@ from threading import Thread
 
 import asyncio
 import concurrent.futures
+import configparser
 import curses, curses.panel
 import logging
 import signal
@@ -23,19 +24,20 @@ class Wraith:
     def __init__(self):
 
         self.cmdbuf = ''
+        self.config = configparser.ConfigParser()
         self.msg = ''
         self.readbuf = ''
         self.cmds = deque()
         self.logfile = open('log.txt', 'w')
-        self.parser = GS3Parser(self.logfile)
+        self.parser = GS3Parser(self.config, self.logfile)
         self.prevcmds = deque()
         self.cmdidx = 0
+        
 
     async def _user_input(self, scr):
         """
         Monitors user keystrokes and performs actions accordingly.
-        """
-        
+        """        
         log = logging.getLogger('_user_input')
         log.info('starting')
 
@@ -151,9 +153,8 @@ class Wraith:
         """
         Triggers redrawing of all window elements
         """
-
         # Create windows
-        sidebar_width = 15
+        sidebar_width = 25
         chatline_yx = (curses.LINES - 3, 0)
         sidebar_hwyx = (curses.LINES - 3, sidebar_width - 1, 0, 0)
         main_hwyx = (curses.LINES - 5, curses.COLS - sidebar_width - 1,
@@ -224,6 +225,8 @@ class Wraith:
         scr.nodelay(True)
 
         try:
+            self.config.read('styles.ini')
+            
             loop = asyncio.get_event_loop()
             update_windows_coro = self.handle_exception(self._update_windows(scr), loop)
             user_input_coro = self.handle_exception(self._user_input(scr), loop)
