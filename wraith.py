@@ -118,11 +118,22 @@ class Wraith:
         """
         Redraw main window with supplied data
         """
+        self.logfile.write(str(self.parser.text))
+        
         if self.cmdbuf:
             win.addstr(self.cmdbuf)
             self.cmdbuf = ''
-        if self.parser.text:
-            win.addstr(self.parser.text + '\n')
+
+        style = curses.color_pair(1)
+        for t in self.parser.text:
+            if type(t) == int:
+                style = curses.color_pair(t) | curses.A_BOLD
+            else:
+                win.addstr(str(t), style)
+                
+        if len(self.parser.text) > 0:
+            win.addstr('\n')
+            
         if (bool(self.parser.spells)):
             win.addstr(json.dumps(self.parser.spells) + '\n')
         if (bool(self.parser.stats)):
@@ -215,11 +226,23 @@ class Wraith:
             loop.stop()
 
             
+    def _curses_setup(self):
+        """
+        """
+        curses.start_color()
+        curses.use_default_colors()
+
+        # Colors
+        # TODO associate the numbers of each color pair to tags in styles.ini?
+        curses.init_pair(1, curses.COLOR_WHITE, -1)
+        curses.init_pair(2, curses.COLOR_YELLOW, -1)
+        
+            
     def main(self, scr):
         """
         Starts async loops for updating GUI, monitoring for user input, and managing server connection
         """
-        curses.start_color()
+        self._curses_setup()
         scr.clear()
         scr.keypad(True)
         scr.nodelay(True)

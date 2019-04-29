@@ -16,7 +16,7 @@ class GS3Parser:
         self.injuries = []
         self.bold = False
         self.style = 'default'
-        self.text = ""
+        self.text = []
 
     def clear_vars(self):
         self.bold = False
@@ -24,22 +24,17 @@ class GS3Parser:
         self.stats = {}
         self.style = 'default'
         self.injuries = []
-        self.text = ""
+        self.text = []
         
     def parse(self, data):
         """
         """
-        #if not self._is_xml(data):
-        #    self.text = str(data)
-        #    self.logger.write(self.text)
-        #    return
-        
         soup = BeautifulSoup(data, 'html.parser')
         for child in soup:
 
             name = child.name
             if not name:
-                self.text += child
+                self.text.append(child)
             elif 'a' == name:
                 #TODO
                 pass
@@ -79,7 +74,12 @@ class GS3Parser:
                 #TODO
                 pass
             elif 'style' == name:
-                self.style = child.attrs['id']
+                self._style(child)
+                #self.text.append(child.attrs['id'])
+                #if child.attrs['id'] == 'roomName':
+                #    self.text.append(2)
+                #else:
+                #    self.text.append(1)
             else:
                 if name is not None:
                     self.logger.write('unrecognized tag: ' + name + '\n') 
@@ -116,7 +116,8 @@ class GS3Parser:
     def _style(self, elem):
         """Parses the style tag
         """
-        if 'id' not in elem:
+        if 'id' not in elem.attrs:
             return
 
-        self.style = self.config[elem['id']]
+        # Accesses color pair by styles.ini value
+        self.text.append(curses.color_pair(self.config[elem.attrs['id']])) 
