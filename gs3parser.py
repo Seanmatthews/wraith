@@ -4,22 +4,22 @@ import re
 
 class GS3Parser:
 
-    def __init__(self, config, logger):
+    def __init__(self, styles, logger):
         # this is load from file
         #curses.init_pair(curses.COLOR_WHITE, curses.COLOR_WHITE, curses.COLOR_BLACK)
         #self.style_color = {'roomDesc': curses.COLOR_WHITE}
-        self.config = {} #config
+        self.styles = styles
         self.logger = logger
         self.spells = {}
         self.stats = {}
         self.hands = {'left': '', 'right': ''}
         self.injuries = []
-        self.bold = False
+        self.bold = 0
         self.style = 'default'
         self.text = []
 
     def clear_vars(self):
-        self.bold = False
+        self.bold = 0
         self.spells = {}
         self.stats = {}
         self.style = 'default'
@@ -36,7 +36,6 @@ class GS3Parser:
             if not name:
                 self.text.append(child)
             elif 'a' == name:
-                #TODO
                 pass
             elif 'compass' == name:
                 pass
@@ -58,9 +57,9 @@ class GS3Parser:
             elif 'progressbar' == name:
                 self._progressbar(child)
             elif 'pushbold' == name:
-                self.bold = True
+                self.bold = curses.A_BOLD
             elif 'popbold' == name:
-                self.bold = False
+                self.bold = 0
             elif 'preset' == name:
                 pass
             elif 'prompt' == name:
@@ -75,11 +74,6 @@ class GS3Parser:
                 pass
             elif 'style' == name:
                 self._style(child)
-                #self.text.append(child.attrs['id'])
-                #if child.attrs['id'] == 'roomName':
-                #    self.text.append(2)
-                #else:
-                #    self.text.append(1)
             else:
                 if name is not None:
                     self.logger.write('unrecognized tag: ' + name + '\n') 
@@ -120,4 +114,7 @@ class GS3Parser:
             return
 
         # Accesses color pair by styles.ini value
-        self.text.append(curses.color_pair(self.config[elem.attrs['id']])) 
+        if elem.attrs['id'].lower() in self.styles:
+            self.text.append(self.styles[elem.attrs['id'].lower()])
+        else:
+            self.text.append(self.styles['default'])

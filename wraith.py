@@ -15,7 +15,7 @@ import string
 import sys
 import time
 
-import json
+import json # FOR DEBUGGING
 
 POLL_INTERVAL = 0.01
 
@@ -29,10 +29,10 @@ class Wraith:
         self.readbuf = ''
         self.cmds = deque()
         self.logfile = open('log.txt', 'w')
-        self.parser = GS3Parser(self.config, self.logfile)
+        self.parser = None
         self.prevcmds = deque()
         self.cmdidx = 0
-        
+        self.styles = {}
 
     async def _user_input(self, scr):
         """
@@ -118,18 +118,20 @@ class Wraith:
         """
         Redraw main window with supplied data
         """
-        self.logfile.write(str(self.parser.text))
+        #if len(self.parser.text) > 0:
+        #    self.logfile.write(str(self.parser.text))
         
         if self.cmdbuf:
             win.addstr(self.cmdbuf)
             self.cmdbuf = ''
 
-        style = curses.color_pair(1)
+        style = self.styles['default']
         for t in self.parser.text:
             if type(t) == int:
-                style = curses.color_pair(t) | curses.A_BOLD
+                style = t
             else:
                 win.addstr(str(t), style)
+                #win.attroff(curses.A_BOLD)
                 
         if len(self.parser.text) > 0:
             win.addstr('\n')
@@ -229,14 +231,26 @@ class Wraith:
     def _curses_setup(self):
         """
         """
+        self.config.read('styles.ini')
+
         curses.start_color()
         curses.use_default_colors()
 
         # Colors
-        # TODO associate the numbers of each color pair to tags in styles.ini?
-        curses.init_pair(1, curses.COLOR_WHITE, -1)
-        curses.init_pair(2, curses.COLOR_YELLOW, -1)
-        
+        for key,color in self.config._sections['NORMAL'].items():
+            curses.init_pair(int(color), int(color), -1)
+            self.styles[key] = curses.color_pair(int(color))
+
+        for key,color in self.config._sections['BOLD'].items():
+            curses.init_pair(int(color), int(color), -1)
+            self.styles[key] = curses.color_pair(int(color)) | curses.A_BOLD
+
+        # Account for empty string key, which occurs often
+        if 'default' in self.styles:
+            self.styles[''] = self.styles['default']
+
+        self.parser = GS3Parser(self.styles, self.logfile)
+
             
     def main(self, scr):
         """
@@ -248,8 +262,6 @@ class Wraith:
         scr.nodelay(True)
 
         try:
-            self.config.read('styles.ini')
-            
             loop = asyncio.get_event_loop()
             update_windows_coro = self.handle_exception(self._update_windows(scr), loop)
             user_input_coro = self.handle_exception(self._user_input(scr), loop)
@@ -261,8 +273,8 @@ class Wraith:
             loop.run_forever()
         except Exception:
             self.logfile.close()
-        finally:
-            loop.stop()
+        #finally:
+        #    loop.stop()
             
 
 if __name__ == '__main__':
