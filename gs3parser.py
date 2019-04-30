@@ -130,6 +130,6 @@ class GS3Parser:
     def _text(self, elem):
         """
         """
-        if re.match('---', elem) or re.match(';', elem):
+        if re.match('---|;|\[.+\]', elem):
             self.text.append(self.styles['lnet'])
         self.text.append(elem)
