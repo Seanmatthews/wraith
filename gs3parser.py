@@ -34,9 +34,10 @@ class GS3Parser:
 
             name = child.name
             if not name:
-                self.text.append(child)
+                self._text(child)
             elif 'a' == name:
-                pass
+                if 'noun' in child.attrs:
+                    self._noun(child)
             elif 'compass' == name:
                 pass
             elif 'dialogdata' == name:
@@ -101,6 +102,13 @@ class GS3Parser:
                     if child.name == 'label':
                         self.spells[child.attrs['id']] = child.attrs['value']
 
+    def _noun(self, elem):
+        """
+        """
+        self.text.append(self.styles['noun'])
+        self.text.append(elem.text)
+        self.text.append(self.styles['default'])
+        
     def _progressbar(self, elem):
         """Parses the progressbar tag
         """
@@ -118,3 +126,10 @@ class GS3Parser:
             self.text.append(self.styles[elem.attrs['id'].lower()])
         else:
             self.text.append(self.styles['default'])
+
+    def _text(self, elem):
+        """
+        """
+        if re.match('---', elem) or re.match(';', elem):
+            self.text.append(self.styles['lnet'])
+        self.text.append(elem)
